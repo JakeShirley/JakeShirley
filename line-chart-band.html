@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Line Chart with Confidence Band - D3.js</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #f5f5f5;
+        }
+
+        #chart-container {
+            position: relative;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-top: 0;
+            font-size: 24px;
+        }
+
+        .line {
+            fill: none;
+            stroke: steelblue;
+            stroke-width: 2.5;
+        }
+
+        .band {
+            fill: steelblue;
+            opacity: 0.2;
+        }
+
+        .axis path,
+        .axis line {
+            stroke: #666;
+        }
+
+        .axis text {
+            fill: #666;
+            font-size: 12px;
+        }
+
+        .grid line {
+            stroke: #e0e0e0;
+            stroke-opacity: 0.7;
+            shape-rendering: crispEdges;
+        }
+
+        .grid path {
+            stroke-width: 0;
+        }
+
+        .axis-label {
+            font-size: 14px;
+            fill: #333;
+        }
+    </style>
+</head>
+<body>
+    <div id="chart-container">
+        <h1>Line Chart with Confidence Band</h1>
+        <svg id="chart"></svg>
+    </div>
+
+    <script>
+        // 1. Data Generation - Create dummy data with dates, central values, and bounds
+        function generateData() {
+            const data = [];
+            const startDate = new Date(2024, 0, 1); // January 1, 2024
+            const numPoints = 30;
+            
+            for (let i = 0; i < numPoints; i++) {
+                const date = new Date(startDate);
+                date.setDate(date.getDate() + i);
+                
+                // Generate a central value with some variation
+                const baseValue = 50 + Math.sin(i / 5) * 20 + Math.random() * 10;
+                const variance = 8 + Math.random() * 4;
+                
+                data.push({
+                    date: date,
+                    value: baseValue,
+                    lowerBound: baseValue - variance,
+                    upperBound: baseValue + variance
+                });
+            }
+            
+            return data;
+        }
+
+        const data = generateData();
+
+        // Set up dimensions and margins
+        const margin = { top: 20, right: 30, bottom: 60, left: 60 };
+        const width = 800 - margin.left - margin.right;
+        const height = 500 - margin.top - margin.bottom;
+
+        // Select the SVG element and set dimensions
+        const svg = d3.select("#chart")
+            .attr("width", width + margin.left + margin.right)
+            .attr("height", height + margin.top + margin.bottom)
+            .append("g")
+            .attr("transform", `translate(${margin.left},${margin.top})`);
+
+        // 2. Scales - Setup x (time) and y (linear) scales
+        const xScale = d3.scaleTime()
+            .domain(d3.extent(data, d => d.date))
+            .range([0, width]);
+
+        const yScale = d3.scaleLinear()
+            .domain([
+                d3.min(data, d => d.lowerBound) - 5,
+                d3.max(data, d => d.upperBound) + 5
+            ])
+            .range([height, 0]);
+
+        // Add grid lines
+        svg.append("g")
+            .attr("class", "grid")
+            .attr("opacity", 0.1)
+            .call(d3.axisLeft(yScale)
+                .tickSize(-width)
+                .tickFormat("")
+            );
+
+        // 3. Axes - Render x and y axes
+        const xAxis = d3.axisBottom(xScale)
+            .ticks(10)
+            .tickFormat(d3.timeFormat("%b %d"));
+
+        const yAxis = d3.axisLeft(yScale)
+            .ticks(10);
+
+        // Add X axis
+        svg.append("g")
+            .attr("class", "axis")
+            .attr("transform", `translate(0,${height})`)
+            .call(xAxis)
+            .selectAll("text")
+            .attr("transform", "rotate(-45)")
+            .style("text-anchor", "end");
+
+        // Add Y axis
+        svg.append("g")
+            .attr("class", "axis")
+            .call(yAxis);
+
+        // Add axis labels
+        svg.append("text")
+            .attr("class", "axis-label")
+            .attr("text-anchor", "middle")
+            .attr("x", width / 2)
+            .attr("y", height + margin.bottom - 5)
+            .text("Date");
+
+        svg.append("text")
+            .attr("class", "axis-label")
+            .attr("text-anchor", "middle")
+            .attr("transform", "rotate(-90)")
+            .attr("x", -height / 2)
+            .attr("y", -margin.left + 15)
+            .text("Value");
+
+        // 4. Area Generator - Create the band using lower and upper bounds
+        const area = d3.area()
+            .x(d => xScale(d.date))
+            .y0(d => yScale(d.lowerBound))
+            .y1(d => yScale(d.upperBound))
+            .curve(d3.curveMonotoneX); // Smooth curve
+
+        // Draw the band
+        svg.append("path")
+            .datum(data)
+            .attr("class", "band")
+            .attr("d", area);
+
+        // 5. Line Generator - Draw the main line chart on top of the band
+        const line = d3.line()
+            .x(d => xScale(d.date))
+            .y(d => yScale(d.value))
+            .curve(d3.curveMonotoneX); // Smooth curve
+
+        // Draw the line
+        svg.append("path")
+            .datum(data)
+            .attr("class", "line")
+            .attr("d", line);
+
+        // Add points on the line
+        svg.selectAll(".point")
+            .data(data)
+            .enter()
+            .append("circle")
+            .attr("class", "point")
+            .attr("cx", d => xScale(d.date))
+            .attr("cy", d => yScale(d.value))
+            .attr("r", 3)
+            .attr("fill", "steelblue")
+            .attr("stroke", "white")
+            .attr("stroke-width", 1.5);
+
+        // Add tooltips on hover
+        const tooltip = d3.select("#chart-container")
+            .append("div")
+            .style("position", "absolute")
+            .style("padding", "8px")
+            .style("background", "rgba(0, 0, 0, 0.8)")
+            .style("color", "white")
+            .style("border-radius", "4px")
+            .style("font-size", "12px")
+            .style("pointer-events", "none")
+            .style("opacity", 0);
+
+        svg.selectAll(".point")
+            .on("mouseover", function(event, d) {
+                d3.select(this)
+                    .attr("r", 5)
+                    .attr("fill", "orange");
+                
+                tooltip
+                    .style("opacity", 1)
+                    .html(`
+                        <strong>Date:</strong> ${d3.timeFormat("%B %d, %Y")(d.date)}<br/>
+                        <strong>Value:</strong> ${d.value.toFixed(2)}<br/>
+                        <strong>Range:</strong> ${d.lowerBound.toFixed(2)} - ${d.upperBound.toFixed(2)}
+                    `)
+                    .style("left", (event.pageX + 10) + "px")
+                    .style("top", (event.pageY - 10) + "px");
+            })
+            .on("mouseout", function() {
+                d3.select(this)
+                    .attr("r", 3)
+                    .attr("fill", "steelblue");
+                
+                tooltip.style("opacity", 0);
+            });
+    </script>
+</body>
+</html>
