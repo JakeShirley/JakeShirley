@@ -17,6 +17,7 @@
         }
 
         #chart-container {
+            position: relative;
             background-color: white;
             padding: 20px;
             border-radius: 8px;
@@ -211,7 +212,7 @@
             .attr("stroke-width", 1.5);
 
         // Add tooltips on hover
-        const tooltip = d3.select("body")
+        const tooltip = d3.select("#chart-container")
             .append("div")
             .style("position", "absolute")
             .style("padding", "8px")
